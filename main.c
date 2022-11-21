@@ -73,6 +73,17 @@ const JitInstructionEncoding ret_encoding[] = {
      }
 };
 
+const JitInstructionEncoding push_encoding[] = {
+     (JitInstructionEncoding) {
+          .opcode = 0x50,
+          .extension_type = JIT_INSTR_EXT_NONE,
+          .encoding_type = {
+               JIT_OPERAND_ENCODING_REGISTER,
+               JIT_OPERAND_ENCODING_NONE
+          }
+     }
+};
+
 const JitInstructionEncoding mov_encoding[] = {
      (JitInstructionEncoding) {
           .opcode = 0x89,
@@ -131,6 +142,11 @@ const JitMnemonic mnemonic_ret = {
 const JitMnemonic mnemonic_add = {
      .encoding_list = &add_encoding[0],
      .encoding_list_length = ARRAY_SIZE(add_encoding)
+};
+
+const JitMnemonic mnemonic_push = {
+     .encoding_list = &push_encoding[0],
+     .encoding_list_length = ARRAY_SIZE(push_encoding)
 };
 
 typedef enum {
@@ -299,7 +315,23 @@ void encode_mi(buffer *buf, JitInstruction instruction)
      buf_append_s32(buf, instruction.operand[1].immediate);
 }
 
+void encode_o(buffer *buf, JitInstruction instruction)
+{
+     assert(instruction.operand[0].type == JIT_OPERAND_REGISTER);
+     assert(instruction.operand[1].type == JIT_OPERAND_NONE);
 
+     const JitInstructionEncoding *encoding = NULL;
+
+     for (u64 i = 0; i < instruction.mnemonic.encoding_list_length; i++) {
+          JitInstructionEncoding elt = instruction.mnemonic.encoding_list[i]; 
+          if(elt.encoding_type[0] == JIT_OPERAND_ENCODING_REGISTER &&
+             elt.encoding_type[1] == JIT_OPERAND_ENCODING_NONE) {
+               encoding = &instruction.mnemonic.encoding_list[i];
+               break;
+          }
+     }
+     buf_append_u8(buf, encoding->opcode + (u8)instruction.operand[0].reg);
+}
 
 void encode_zo(buffer *buf, JitInstruction instruction)
 {
@@ -330,6 +362,8 @@ void encode(buffer *buf, JitInstruction instruction)
                return encode_mr(buf, instruction); // actually rm
           case JIT_OPERAND_IMMEDIATE:
                return encode_mi(buf, instruction);
+          case JIT_OPERAND_NONE:
+               return encode_o(buf, instruction);
           default:
                assert(false);
           }
@@ -354,15 +388,9 @@ void encode(buffer *buf, JitInstruction instruction)
      }
 }
 
-
-void buf_append_push_reg(buffer *buf, JitRegister reg)
+JitOperand operand_none()
 {
-     buf_append_u8(buf, 0x50 + (u8)reg);
-}
-
-void buf_append_pop_reg(buffer *buf, JitRegister reg)
-{
-     buf_append_u8(buf, 0x58 + (u8)reg);
+     return (JitOperand) {.type = JIT_OPERAND_NONE };
 }
 
 JitOperand operand_register(JitRegister reg)
@@ -386,6 +414,22 @@ JitOperand operand_indirect_access(JitRegister reg, u8 offset)
           }
      };
 }
+
+void buf_append_push_reg(buffer *buf, JitRegister reg)
+{
+     encode(buf, (JitInstruction) {
+               .mnemonic = mnemonic_push,
+               .operand = { operand_register(reg), operand_none() }
+          });
+     // buf_append_u8(buf, 0x50 + (u8)reg);
+}
+
+void buf_append_pop_reg(buffer *buf, JitRegister reg)
+{
+     buf_append_u8(buf, 0x58 + (u8)reg);
+}
+
+
 
 void buf_append_mov_reg_imm32(buffer *buf, JitRegister reg, s32 value)
 {
