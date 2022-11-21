@@ -287,23 +287,35 @@ void buf_append_pop_reg(buffer *buf, JitRegister reg)
      buf_append_u8(buf, 0x58 + (u8)reg);
 }
 
+JitOperand operand_register(JitRegister reg)
+{
+     return (JitOperand) {.type = JIT_OPERAND_REGISTER, .reg = reg};
+}
+
+JitOperand operand_immediate(s32 value)
+{
+     return (JitOperand) {.type = JIT_OPERAND_IMMEDIATE, .immediate = value};
+}
+
+JitOperand operand_indirect_access(JitRegister reg, u8 offset)
+{
+     return (JitOperand) {
+          .type = JIT_OPERAND_REGISTER_INDIRECT_ACCESS,
+          .indirect = (JitOperandIndirectAccess) {
+               .reg = reg,
+               .address_mode = JIT_ADDR_MODE_ONE_BYTE, // four byte etc...
+               .displacement = { offset }
+          }
+     };
+}
+
 void buf_append_mov_reg_imm32(buffer *buf, JitRegister reg, s32 value)
 {
-     printf("should be %x\n", 0xc7);
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_NONE,
-               .operand = {
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER,
-                         .reg = reg
-                    },
-                    (JitOperand) {
-                         .type = JIT_OPERAND_IMMEDIATE,
-                         .immediate = value
-                    }
-               }
+               .operand = { operand_register(reg), operand_immediate(value) }
           });
 
      // buf_append_u8(buf, JIT_REX_W);
@@ -318,10 +330,7 @@ void buf_append_mov_reg_reg(buffer *buf, JitRegister dst, JitRegister src)
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_MEMORY,
-               .operand = { 
-                    (JitOperand) {.type = JIT_OPERAND_REGISTER, .reg = dst},
-                    (JitOperand) {.type = JIT_OPERAND_REGISTER, .reg = src}
-               }
+               .operand = { operand_register(dst), operand_register(src) }
           });
      // buf_append_u8(buf, JIT_REX_W);
      // buf_append_u8(buf, 0x89);
@@ -334,20 +343,7 @@ void buf_append_mov_rm_reg(buffer *buf, JitRegister dst, JitRegister src, u8 dis
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_MEMORY,
-               .operand = {
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER_INDIRECT_ACCESS,
-                         .indirect = {
-                              .reg = dst,
-                              .address_mode = JIT_ADDR_MODE_ONE_BYTE,
-                              .displacement = {displacement}
-                         }
-                    },
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER,
-                         .reg = src
-                    }
-               }
+               .operand = { operand_indirect_access(dst, displacement), operand_register(src) }
           });
      /* buf_append_u8(buf, 0x89); */
      /* buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_ONE_BYTE, src, dst)); */
@@ -360,20 +356,7 @@ void buf_append_mov_reg_rm(buffer *buf, JitRegister dst, JitRegister src, u8 dis
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_REGISTER,
-               .operand = {
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER_INDIRECT_ACCESS,
-                         .indirect = {
-                              .reg = src,
-                              .address_mode = JIT_ADDR_MODE_ONE_BYTE,
-                              .displacement = {displacement}
-                         }
-                    },
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER,
-                         .reg = dst
-                    }
-               }
+               .operand = { operand_indirect_access(src, displacement), operand_register(dst) }
           });
      // buf_append_u8(buf, JIT_REX_W);
      // buf_append_u8(buf, 0x8b);
@@ -387,20 +370,7 @@ void buf_append_mov_rm_imm32(buffer *buf, JitRegister reg, u8 displacement, s32 
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_NONE,
-              .operand = {
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER_INDIRECT_ACCESS,
-                         .indirect = (JitOperandIndirectAccess) {
-                              .reg = reg,
-                              .address_mode = JIT_ADDR_MODE_ONE_BYTE,
-                              .displacement = {displacement},
-                         }
-                    },
-                    (JitOperand) {
-                         .type = JIT_OPERAND_IMMEDIATE,
-                         .immediate = value
-                    }
-               }
+              .operand = { operand_indirect_access(reg, displacement), operand_immediate(value) }
           });
 
      // buf_append_u8(buf, 0xc7);
@@ -415,16 +385,7 @@ void buf_append_add_reg_reg(buffer *buf, JitRegister dst, JitRegister src)
                .mnemonic = mnemonic_add,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_MEMORY,
-               .operand = {
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER,
-                         .reg = dst
-                    },
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER,
-                         .reg = src
-                    }
-               }
+               .operand = { operand_register(dst), operand_register(src) }
           });
      // buf_append_u8(buf, JIT_REX_W);
      // buf_append_u8(buf, 0x01);
@@ -437,16 +398,7 @@ void buf_append_add_reg_imm32(buffer *buf, JitRegister reg, s32 value)
                .mnemonic = mnemonic_add,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_NONE,
-               .operand = {
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER,
-                         .reg = reg
-                    },
-                    (JitOperand) {
-                         .type = JIT_OPERAND_IMMEDIATE,
-                         .immediate = value
-                    }
-               }
+               .operand = { operand_register(reg), operand_immediate(value) }
           });
      // buf_append_u8(buf, JIT_REX_W);
      // buf_append_u8(buf, 0x81);
@@ -460,20 +412,7 @@ void buf_append_add_reg_rm(buffer *buf, JitRegister dst, JitRegister src, u8 dis
                .mnemonic = mnemonic_add,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_REGISTER,
-               .operand = {
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER_INDIRECT_ACCESS,
-                         .indirect = (JitOperandIndirectAccess) {
-                              .reg = src,
-                              .address_mode = JIT_ADDR_MODE_ONE_BYTE,
-                              .displacement = {displacement}
-                         }
-                    },
-                    (JitOperand) {
-                         .type = JIT_OPERAND_REGISTER,
-                         .immediate = dst
-                    }
-               }
+               .operand = { operand_indirect_access(src, displacement), operand_register(dst) }
           });
 
      // buf_append_u8(buf, JIT_REX_W);
