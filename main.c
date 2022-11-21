@@ -197,9 +197,55 @@ bool operand_encoding_typecheck(JitOperand operand, JitOperandEncodingType opera
      return false;
 }
 
+// Encoding: Op1=R/M Op2=IMM
+void encode_mi(buffer *buf, JitInstruction instruction)
+{
+     assert((instruction.operand[0].type == JIT_OPERAND_REGISTER) || (instruction.operand[0].type == JIT_OPERAND_REGISTER_INDIRECT_ACCESS));
+     assert(instruction.operand[1].type == JIT_OPERAND_IMMEDIATE);
+
+     const JitInstructionEncoding *encoding = NULL;
+
+     for (u64 i = 0; i < instruction.mnemonic.encoding_list_length; i++) {
+          JitInstructionEncoding elt = instruction.mnemonic.encoding_list[i]; 
+          if(elt.encoding_type[0] == JIT_OPERAND_ENCODING_REGISTER_MEMORY &&
+             elt.encoding_type[1] == JIT_OPERAND_ENCODING_IMMEDIATE) {
+               encoding = &instruction.mnemonic.encoding_list[i];
+               break;
+          }
+     }
+
+     assert(encoding);
+
+     if (instruction.operand[0].type == JIT_OPERAND_REGISTER)
+          buf_append_u8(buf, JIT_REX_W);
+
+     buf_append_u8(buf, encoding->opcode);
+
+     if (instruction.operand[0].type == JIT_OPERAND_REGISTER) {
+          buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_REGISTER, /*src=*/0, /*dst=*/instruction.operand[0].reg));
+     } else if(instruction.operand[0].type == JIT_OPERAND_REGISTER_INDIRECT_ACCESS) {
+          buf_append_u8(buf, MOD_REG_RM(instruction.operand[0].indirect.address_mode, /*src=*/0, /*dst=*/instruction.operand[0].reg));
+          switch(instruction.operand[0].indirect.address_mode) {
+          case JIT_ADDR_MODE_ZERO_BYTE:
+               break;
+          case JIT_ADDR_MODE_ONE_BYTE:
+               buf_append_u8(buf, instruction.operand[0].indirect.displacement.one_byte);
+               break;
+          case JIT_ADDR_MODE_FOUR_BYTE:
+               buf_append_u32(buf, instruction.operand[0].indirect.displacement.four_byte);
+               break;
+          default:
+               assert(false);
+               break;
+          }               
+     }
+
+     buf_append_s32(buf, instruction.operand[1].immediate);
+
+}
+
 void encode(buffer *buf, JitInstruction instruction)
 {
-
      const JitInstructionEncoding *encoding = NULL;
 
      /// Search for the correct encoding
@@ -311,7 +357,7 @@ JitOperand operand_indirect_access(JitRegister reg, u8 offset)
 
 void buf_append_mov_reg_imm32(buffer *buf, JitRegister reg, s32 value)
 {
-     encode(buf, (JitInstruction) {
+     encode_mi(buf, (JitInstruction) {
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_NONE,
@@ -366,7 +412,7 @@ void buf_append_mov_reg_rm(buffer *buf, JitRegister dst, JitRegister src, u8 dis
 
 void buf_append_mov_rm_imm32(buffer *buf, JitRegister reg, u8 displacement, s32 value)
 {
-     encode(buf, (JitInstruction) {
+     encode_mi(buf, (JitInstruction) {
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_NONE,
@@ -394,7 +440,7 @@ void buf_append_add_reg_reg(buffer *buf, JitRegister dst, JitRegister src)
 
 void buf_append_add_reg_imm32(buffer *buf, JitRegister reg, s32 value)
 {
-     encode(buf, (JitInstruction) {
+     encode_mi(buf, (JitInstruction) {
                .mnemonic = mnemonic_add,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
                .instruction_dest = JIT_INSTR_DEST_NONE,
