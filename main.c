@@ -441,6 +441,15 @@ JitOperand operand_indirect_access(JitRegister reg, u8 offset)
      };
 }
 
+void buf_append_ret(buffer *buf)
+{
+     encode(buf, (JitInstruction) { 
+               .mnemonic = mnemonic_ret,
+               .instruction_size = JIT_INSTR_SIZE_NONE,
+               .operand = { operand_none(), operand_none() }
+          });
+}
+
 void buf_append_push_reg(buffer *buf, JitRegister reg)
 {
      encode(buf, (JitInstruction) {
@@ -575,12 +584,8 @@ JitConstantInt make_constant_int(int value)
      buf_append_mov_reg_imm32(&buf, RAX, value);
 
      buf_append_pop_reg(&buf, RBP);
+     buf_append_ret(&buf);
 
-     encode(&buf, (JitInstruction) { 
-               .mnemonic = mnemonic_ret,
-               .instruction_size = JIT_INSTR_SIZE_NONE,
-               .operand = {{0}}
-          });
      return (JitConstantInt)buf.memory;
 }
 
@@ -595,11 +600,7 @@ JitIdentityInt make_identity_int()
      buf_append_mov_reg_rm(&buf, RAX, RBP, -4);
 
      buf_append_pop_reg(&buf, RBP);
-     encode(&buf, (JitInstruction) { 
-               .mnemonic = mnemonic_ret,
-               .instruction_size = JIT_INSTR_SIZE_NONE,
-               .operand = {{0}}
-          });
+     buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
 }
 
@@ -621,11 +622,7 @@ JitIncrementInt make_increment_int(s32 value)
      /* buf_append_add_reg_rm(&buf, RAX, RBP, -4); */
 
      buf_append_pop_reg(&buf, RBP);
-     encode(&buf, (JitInstruction) { 
-               .mnemonic = mnemonic_ret,
-               .instruction_size = JIT_INSTR_SIZE_NONE,
-               .operand = {{0}}
-          });
+     buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
 }
 
@@ -641,11 +638,7 @@ JitIncrementInt make_add2_int(s32 value1, s32 value2)
      buf_append_add_reg_rm(&buf, RAX, RBP, -4);
 
      buf_append_pop_reg(&buf, RBP);
-     encode(&buf, (JitInstruction) { 
-               .mnemonic = mnemonic_ret,
-               .instruction_size = JIT_INSTR_SIZE_NONE,
-               .operand = {{0}}
-          });
+     buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
 }
 
