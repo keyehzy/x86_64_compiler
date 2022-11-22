@@ -456,7 +456,6 @@ void buf_append_push_reg(buffer *buf, JitRegister reg)
                .mnemonic = mnemonic_push,
                .operand = { operand_register(reg), operand_none() }
           });
-     // buf_append_u8(buf, 0x50 + (u8)reg);
 }
 
 void buf_append_pop_reg(buffer *buf, JitRegister reg)
@@ -466,111 +465,24 @@ void buf_append_pop_reg(buffer *buf, JitRegister reg)
                .operand = { operand_register(reg), operand_none() }
           });
 
-     // buf_append_u8(buf, 0x58 + (u8)reg);
 }
 
-void buf_append_mov_reg_imm32(buffer *buf, JitRegister reg, s32 value)
+void buf_append_mov(buffer *buf, JitOperand dst, JitOperand src)
 {
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .operand = { operand_register(reg), operand_immediate(value) }
+               .operand = { dst, src }
           });
-
-     // buf_append_u8(buf, JIT_REX_W);
-     // buf_append_u8(buf, 0xc7);
-     // buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_REGISTER, 0, reg));
-     // buf_append_s32(buf, value);
 }
 
-void buf_append_mov_reg_reg(buffer *buf, JitRegister dst, JitRegister src)
-{
-     encode(buf, (JitInstruction) {
-               .mnemonic = mnemonic_mov,
-               .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .operand = { operand_register(dst), operand_register(src) }
-          });
-     // buf_append_u8(buf, JIT_REX_W);
-     // buf_append_u8(buf, 0x89);
-     // buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_REGISTER, src, dst));
-}
-
-void buf_append_mov_rm_reg(buffer *buf, JitRegister dst, JitRegister src, u8 displacement)
-{
-     encode(buf, (JitInstruction) {
-               .mnemonic = mnemonic_mov,
-               .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .operand = { operand_indirect_access(dst, displacement), operand_register(src) }
-          });
-     /* buf_append_u8(buf, 0x89); */
-     /* buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_ONE_BYTE, src, dst)); */
-     /* buf_append_u8(buf, displacement); */
-}
-
-void buf_append_mov_reg_rm(buffer *buf, JitRegister dst, JitRegister src, u8 displacement)
-{
-     encode(buf, (JitInstruction) {
-               .mnemonic = mnemonic_mov,
-               .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .operand = { operand_register(dst), operand_indirect_access(src, displacement) }
-          });
-     // buf_append_u8(buf, JIT_REX_W);
-     // buf_append_u8(buf, 0x8b);
-     // buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_ONE_BYTE, dst, src));
-     // buf_append_u8(buf, displacement);
-}
-
-void buf_append_mov_rm_imm32(buffer *buf, JitRegister reg, u8 displacement, s32 value)
-{
-     encode(buf, (JitInstruction) {
-               .mnemonic = mnemonic_mov,
-               .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-              .operand = { operand_indirect_access(reg, displacement), operand_immediate(value) }
-          });
-
-     // buf_append_u8(buf, 0xc7);
-     // buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_ONE_BYTE, 0, reg));
-     // buf_append_u8(buf, displacement);
-     // buf_append_s32(buf, value);
-}
-
-void buf_append_add_reg_reg(buffer *buf, JitRegister dst, JitRegister src)
+void buf_append_add(buffer *buf, JitOperand dst, JitOperand src)
 {
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_add,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .operand = { operand_register(dst), operand_register(src) }
+               .operand = { dst, src }
           });
-     // buf_append_u8(buf, JIT_REX_W);
-     // buf_append_u8(buf, 0x01);
-     // buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_REGISTER, src, dst));
-}
-
-void buf_append_add_reg_imm32(buffer *buf, JitRegister reg, s32 value)
-{
-     encode(buf, (JitInstruction) {
-               .mnemonic = mnemonic_add,
-               .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .operand = { operand_register(reg), operand_immediate(value) }
-          });
-     // buf_append_u8(buf, JIT_REX_W);
-     // buf_append_u8(buf, 0x81);
-     // buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_REGISTER, 0, reg));
-     // buf_append_s32(buf, value);
-}
-
-void buf_append_add_reg_rm(buffer *buf, JitRegister dst, JitRegister src, u8 displacement)
-{
-     encode(buf, (JitInstruction) {
-               .mnemonic = mnemonic_add,
-               .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .operand = { operand_register(dst), operand_indirect_access(src, displacement) }
-          });
-
-     // buf_append_u8(buf, JIT_REX_W);
-     // buf_append_u8(buf, 0x03);
-     // buf_append_u8(buf, MOD_REG_RM(JIT_ADDR_MODE_ONE_BYTE, dst, src));
-     // buf_append_u8(buf, displacement);
 }
 
 typedef int (*JitConstantInt)();
@@ -578,10 +490,10 @@ JitConstantInt make_constant_int(int value)
 {
      buffer buf = make_buf(4096);
      buf_append_push_reg(&buf, RBP);
-     buf_append_mov_reg_reg(&buf, RBP, RSP);
+     buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
-     buf_append_mov_rm_reg(&buf, RBP, RDI, -4);
-     buf_append_mov_reg_imm32(&buf, RAX, value);
+     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
+     buf_append_mov(&buf, operand_register(RAX), operand_immediate(value));
 
      buf_append_pop_reg(&buf, RBP);
      buf_append_ret(&buf);
@@ -594,10 +506,10 @@ JitIdentityInt make_identity_int()
 {
      buffer buf = make_buf(4096);
      buf_append_push_reg(&buf, RBP);
-     buf_append_mov_reg_reg(&buf, RBP, RSP);
+     buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
-     buf_append_mov_rm_reg(&buf, RBP, RDI, -4);
-     buf_append_mov_reg_rm(&buf, RAX, RBP, -4);
+     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
+     buf_append_mov(&buf, operand_register(RAX), operand_indirect_access(RBP, -4));
 
      buf_append_pop_reg(&buf, RBP);
      buf_append_ret(&buf);
@@ -609,13 +521,13 @@ JitIncrementInt make_increment_int(s32 value)
 {
      buffer buf = make_buf(4096);
      buf_append_push_reg(&buf, RBP);
-     buf_append_mov_reg_reg(&buf, RBP, RSP);
+     buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
-     buf_append_mov_rm_reg(&buf, RBP, RDI, -20);
-     buf_append_mov_rm_imm32(&buf, RBP, -4, value);
-     buf_append_mov_reg_rm(&buf, RDX, RBP, -20);
-     buf_append_mov_reg_rm(&buf, RAX, RBP, -4);
-     buf_append_add_reg_reg(&buf, RAX, RDX);
+     buf_append_mov(&buf, operand_indirect_access(RBP, -20), operand_register(RDI));
+     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_immediate(value));
+     buf_append_mov(&buf, operand_register(RDX), operand_indirect_access(RBP, -20));
+     buf_append_mov(&buf, operand_register(RAX), operand_indirect_access(RBP, -4));
+     buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
 
      /* buf_append_mov_rm_reg(&buf, RBP, RDI, -4); */
      /* buf_append_mov_reg_imm32(&buf, RAX, value); */
@@ -627,15 +539,35 @@ JitIncrementInt make_increment_int(s32 value)
 }
 
 typedef int (*JitAddInt)();
-JitIncrementInt make_add2_int(s32 value1, s32 value2)
+JitAddInt make_add2_int(s32 value1, s32 value2)
 {
      buffer buf = make_buf(4096);
      buf_append_push_reg(&buf, RBP);
-     buf_append_mov_reg_reg(&buf, RBP, RSP);
+     buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
-     buf_append_mov_rm_imm32(&buf, RBP, -4, value1);
-     buf_append_mov_reg_imm32(&buf, RAX, value2);
-     buf_append_add_reg_rm(&buf, RAX, RBP, -4);
+     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_immediate(value1));
+     buf_append_mov(&buf, operand_register(RAX), operand_immediate(value2));
+     buf_append_add(&buf, operand_register(RAX), operand_indirect_access(RBP, -4));
+
+     buf_append_pop_reg(&buf, RBP);
+     buf_append_ret(&buf);
+     return (JitIdentityInt)buf.memory;
+}
+
+typedef int (*JitAddPassedInt)();
+JitAddPassedInt make_add2_passed_int()
+{
+     buffer buf = make_buf(4096);
+     buf_append_push_reg(&buf, RBP);
+     buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
+
+     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
+     buf_append_mov(&buf, operand_indirect_access(RBP, -8), operand_register(RSI));
+
+     buf_append_mov(&buf, operand_register(RDX), operand_indirect_access(RBP, -4));
+     buf_append_mov(&buf, operand_register(RAX), operand_indirect_access(RBP, -8));
+
+     buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
 
      buf_append_pop_reg(&buf, RBP);
      buf_append_ret(&buf);
@@ -669,6 +601,11 @@ void spec()
      it("should create a function that adds two integers",
         JitIncrementInt result = make_add2_int(42, 43);
         ASSERT_EQ(result(), 85);
+     );
+
+     it("should create a function that adds two integers passed to it",
+        JitIncrementInt result = make_add2_passed_int();
+        ASSERT_EQ(result(42, 43), 85);
      );
 
      verify(suite);
