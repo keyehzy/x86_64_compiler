@@ -205,7 +205,6 @@ typedef struct {
 typedef struct {
      JitMnemonic mnemonic;
      JitInstructionSize instruction_size;
-     JitInstructionDestination instruction_dest;
      JitOperand operand[2];
 } JitInstruction;
 
@@ -493,7 +492,6 @@ void buf_append_mov_reg_imm32(buffer *buf, JitRegister reg, s32 value)
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .instruction_dest = JIT_INSTR_DEST_NONE,
                .operand = { operand_register(reg), operand_immediate(value) }
           });
 
@@ -508,7 +506,6 @@ void buf_append_mov_reg_reg(buffer *buf, JitRegister dst, JitRegister src)
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .instruction_dest = JIT_INSTR_DEST_MEMORY,
                .operand = { operand_register(dst), operand_register(src) }
           });
      // buf_append_u8(buf, JIT_REX_W);
@@ -521,7 +518,6 @@ void buf_append_mov_rm_reg(buffer *buf, JitRegister dst, JitRegister src, u8 dis
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .instruction_dest = JIT_INSTR_DEST_MEMORY,
                .operand = { operand_indirect_access(dst, displacement), operand_register(src) }
           });
      /* buf_append_u8(buf, 0x89); */
@@ -534,7 +530,6 @@ void buf_append_mov_reg_rm(buffer *buf, JitRegister dst, JitRegister src, u8 dis
      encode(buf, (JitInstruction) { // actually rm
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .instruction_dest = JIT_INSTR_DEST_REGISTER,
                .operand = { operand_register(dst), operand_indirect_access(src, displacement) }
           });
      // buf_append_u8(buf, JIT_REX_W);
@@ -548,7 +543,6 @@ void buf_append_mov_rm_imm32(buffer *buf, JitRegister reg, u8 displacement, s32 
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_mov,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .instruction_dest = JIT_INSTR_DEST_NONE,
               .operand = { operand_indirect_access(reg, displacement), operand_immediate(value) }
           });
 
@@ -563,7 +557,6 @@ void buf_append_add_reg_reg(buffer *buf, JitRegister dst, JitRegister src)
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_add,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .instruction_dest = JIT_INSTR_DEST_MEMORY,
                .operand = { operand_register(dst), operand_register(src) }
           });
      // buf_append_u8(buf, JIT_REX_W);
@@ -576,7 +569,6 @@ void buf_append_add_reg_imm32(buffer *buf, JitRegister reg, s32 value)
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_add,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .instruction_dest = JIT_INSTR_DEST_NONE,
                .operand = { operand_register(reg), operand_immediate(value) }
           });
      // buf_append_u8(buf, JIT_REX_W);
@@ -590,7 +582,6 @@ void buf_append_add_reg_rm(buffer *buf, JitRegister dst, JitRegister src, u8 dis
      encode(buf, (JitInstruction) { // actually rm
                .mnemonic = mnemonic_add,
                .instruction_size = JIT_INSTR_SIZE_16_OR_32,
-               .instruction_dest = JIT_INSTR_DEST_REGISTER,
                .operand = { operand_register(dst), operand_indirect_access(src, displacement) }
           });
 
@@ -615,7 +606,6 @@ JitConstantInt make_constant_int(int value)
      encode(&buf, (JitInstruction) { 
                .mnemonic = mnemonic_ret,
                .instruction_size = JIT_INSTR_SIZE_NONE,
-               .instruction_dest = JIT_INSTR_DEST_NONE,
                .operand = {{0}}
           });
      return (JitConstantInt)buf.memory;
@@ -635,7 +625,6 @@ JitIdentityInt make_identity_int()
      encode(&buf, (JitInstruction) { 
                .mnemonic = mnemonic_ret,
                .instruction_size = JIT_INSTR_SIZE_NONE,
-               .instruction_dest = JIT_INSTR_DEST_NONE, 
                .operand = {{0}}
           });
      return (JitIdentityInt)buf.memory;
@@ -662,7 +651,6 @@ JitIncrementInt make_increment_int(s32 value)
      encode(&buf, (JitInstruction) { 
                .mnemonic = mnemonic_ret,
                .instruction_size = JIT_INSTR_SIZE_NONE,
-               .instruction_dest = JIT_INSTR_DEST_NONE, 
                .operand = {{0}}
           });
      return (JitIdentityInt)buf.memory;
@@ -683,7 +671,6 @@ JitIncrementInt make_add2_int(s32 value1, s32 value2)
      encode(&buf, (JitInstruction) { 
                .mnemonic = mnemonic_ret,
                .instruction_size = JIT_INSTR_SIZE_NONE,
-               .instruction_dest = JIT_INSTR_DEST_NONE, 
                .operand = {{0}}
           });
      return (JitIdentityInt)buf.memory;
