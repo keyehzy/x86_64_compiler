@@ -522,7 +522,7 @@ void move_to_stack(buffer *buf, JitStackFrame *frame, JitRegister stack_register
      buf_append_mov(buf, operand_indirect_access(stack_register, frame->stack_pointer), src);
 }
 
-void move_from_stack_offset(buffer *buf, JitStackFrame *frame, JitRegister stack_register, JitOperand dst, u64 offset)
+void move_from_stack_offset(buffer *buf, JitRegister stack_register, JitOperand dst, u64 offset)
 {
      buf_append_mov(buf, dst, operand_indirect_access(stack_register, offset));
 }
@@ -561,7 +561,7 @@ JitIdentityInt make_identity_int()
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
      JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_register(RDI));
-     move_from_stack_offset(&buf, &frame, RBP, operand_register(RAX), param1.stack_offset);
+     move_from_stack_offset(&buf, RBP, operand_register(RAX), param1.stack_offset);
 
      buf_append_pop(&buf, operand_register(RBP));
      buf_append_ret(&buf);
@@ -578,8 +578,8 @@ JitIncrementInt make_increment_int(s32 value)
 
      JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_immediate(value));
      JitVariable param2 = declare_variable(&buf, &frame, RBP, operand_register(RDI));
-     move_from_stack_offset(&buf, &frame, RBP, operand_register(RDX), param1.stack_offset);
-     move_from_stack_offset(&buf, &frame, RBP, operand_register(RAX), param2.stack_offset);
+     move_from_stack_offset(&buf, RBP, operand_register(RDX), param1.stack_offset);
+     move_from_stack_offset(&buf, RBP, operand_register(RAX), param2.stack_offset);
 
      buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
 
@@ -599,8 +599,8 @@ JitAddInt make_add2_int(s32 value1, s32 value2)
      JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_immediate(value1));
      JitVariable param2 = declare_variable(&buf, &frame, RBP, operand_immediate(value2));     
 
-     move_from_stack_offset(&buf, &frame, RBP, operand_register(RDX), param1.stack_offset);
-     move_from_stack_offset(&buf, &frame, RBP, operand_register(RAX), param2.stack_offset);
+     move_from_stack_offset(&buf, RBP, operand_register(RDX), param1.stack_offset);
+     move_from_stack_offset(&buf, RBP, operand_register(RAX), param2.stack_offset);
      buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
 
      buf_append_pop(&buf, operand_register(RBP));
@@ -619,8 +619,8 @@ JitAddPassedInt make_add2_passed_int()
      JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_register(RDI));
      JitVariable param2 = declare_variable(&buf, &frame, RBP, operand_register(RSI));
 
-     move_from_stack_offset(&buf, &frame, RBP, operand_register(RDX), param1.stack_offset);
-     move_from_stack_offset(&buf, &frame, RBP, operand_register(RAX), param2.stack_offset);
+     move_from_stack_offset(&buf, RBP, operand_register(RDX), param1.stack_offset);
+     move_from_stack_offset(&buf, RBP, operand_register(RAX), param2.stack_offset);
      buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
      
      buf_append_pop(&buf, operand_register(RBP));
