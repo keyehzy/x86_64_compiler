@@ -529,7 +529,7 @@ void move_from_stack_offset(buffer *buf, JitRegister stack_register, JitOperand 
 
 JitVariable declare_variable(buffer *buf, JitStackFrame *frame, JitRegister stack_register, JitOperand src)
 {
-     move_to_stack(buf, frame, RBP, src);
+     move_to_stack(buf, frame, stack_register, src);
      return (JitVariable) { frame->stack_pointer };
 
 }
