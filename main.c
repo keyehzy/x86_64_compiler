@@ -597,7 +597,7 @@ JitAddInt make_add2_int(s32 value1, s32 value2)
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
      JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_immediate(value1));
-     JitVariable param2 = declare_variable(&buf, &frame, RBP, operand_immediate(value2));     
+     JitVariable param2 = declare_variable(&buf, &frame, RBP, operand_immediate(value2));
 
      move_from_stack_offset(&buf, RBP, operand_register(RDX), param1.stack_offset);
      move_from_stack_offset(&buf, RBP, operand_register(RAX), param2.stack_offset);
@@ -622,7 +622,7 @@ JitAddPassedInt make_add2_passed_int()
      move_from_stack_offset(&buf, RBP, operand_register(RDX), param1.stack_offset);
      move_from_stack_offset(&buf, RBP, operand_register(RAX), param2.stack_offset);
      buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
-     
+
      buf_append_pop(&buf, operand_register(RBP));
      buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
