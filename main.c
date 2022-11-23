@@ -387,22 +387,28 @@ void encode(buffer *buf, JitInstruction instruction)
      case JIT_OPERAND_REGISTER:
           switch(instruction.operand[1].type) {
           case JIT_OPERAND_REGISTER:
-               return encode_mr(buf, instruction);
+               encode_mr(buf, instruction);
+               return;
           case JIT_OPERAND_REGISTER_INDIRECT_ACCESS:
-               return encode_rm(buf, instruction);
+               encode_rm(buf, instruction);
+               return;
           case JIT_OPERAND_IMMEDIATE:
-               return encode_mi(buf, instruction);
+               encode_mi(buf, instruction);
+               return;
           case JIT_OPERAND_NONE:
-               return encode_o(buf, instruction);
+               encode_o(buf, instruction);
+               return;
           default:
                assert(false);
           }
      case JIT_OPERAND_REGISTER_INDIRECT_ACCESS:
           switch(instruction.operand[1].type) {
           case JIT_OPERAND_REGISTER:
-               return encode_mr(buf, instruction);
+               encode_mr(buf, instruction);
+               return;
           case JIT_OPERAND_IMMEDIATE:
-               return encode_mi(buf, instruction);
+               encode_mi(buf, instruction);
+               return;
           default:
                assert(false);
           }
@@ -411,7 +417,8 @@ void encode(buffer *buf, JitInstruction instruction)
      case JIT_OPERAND_NONE:
           switch(instruction.operand[1].type) {
           case JIT_OPERAND_NONE:
-               return encode_zo(buf, instruction);
+               encode_zo(buf, instruction);
+               return;
           default:
                assert(false);
           }
