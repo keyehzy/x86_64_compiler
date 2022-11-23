@@ -23,12 +23,12 @@ buffer make_buf(u64 capacity)
           buf->size += sizeof(byte);                            \
      }
 
-declare_buf_append_impl(u8);
-declare_buf_append_impl(u16);
-declare_buf_append_impl(u32);
-declare_buf_append_impl(u64);
+declare_buf_append_impl(u8)
+declare_buf_append_impl(u16)
+declare_buf_append_impl(u32)
+declare_buf_append_impl(u64)
 
-declare_buf_append_impl(s8);
-declare_buf_append_impl(s16);
-declare_buf_append_impl(s32);
-declare_buf_append_impl(s64);
+declare_buf_append_impl(s8)
+declare_buf_append_impl(s16)
+declare_buf_append_impl(s32)
+declare_buf_append_impl(s64)
