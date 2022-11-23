@@ -215,6 +215,7 @@ u8 MOD_REG_RM(JitAddressMode mod, JitRegister reg /*src*/, JitRegister rm /*dst*
 
 bool operand_encoding_typecheck(JitOperand operand, JitOperandEncodingType operand_encoding_type)
 {
+
      switch(operand_encoding_type) {
      case JIT_OPERAND_ENCODING_NONE:
           return operand.type == JIT_OPERAND_NONE;
@@ -362,6 +363,9 @@ void encode_o(buffer *buf, JitInstruction instruction)
 
      assert(encoding);
 
+     if (instruction.operand[0].type == JIT_OPERAND_REGISTER)
+          buf_append_u8(buf, JIT_REX_W);
+
      buf_append_u8(buf, encoding->opcode + (u8)instruction.operand[0].reg);
 }
 
@@ -450,19 +454,19 @@ void buf_append_ret(buffer *buf)
           });
 }
 
-void buf_append_push_reg(buffer *buf, JitRegister reg)
+void buf_append_push(buffer *buf, JitOperand src)
 {
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_push,
-               .operand = { operand_register(reg), operand_none() }
+               .operand = { src, operand_none() }
           });
 }
 
-void buf_append_pop_reg(buffer *buf, JitRegister reg)
+void buf_append_pop(buffer *buf, JitOperand src)
 {
      encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_pop,
-               .operand = { operand_register(reg), operand_none() }
+               .operand = { src, operand_none() }
           });
 
 }
@@ -485,17 +489,107 @@ void buf_append_add(buffer *buf, JitOperand dst, JitOperand src)
           });
 }
 
+typedef struct {
+     s32 stack_pointer;
+} JitStackFrame;
+
+typedef struct {
+     s32 stack_offset;
+} JitVariable;
+
+u64 push_to_stack(buffer *buf, JitStackFrame *frame, JitOperand src)
+{
+     u64 offset = frame->stack_pointer;
+
+     switch(src.type) {
+     case JIT_OPERAND_REGISTER:
+     case JIT_OPERAND_REGISTER_INDIRECT_ACCESS:
+          frame->stack_pointer -= 8;
+          break;
+     case JIT_OPERAND_IMMEDIATE:
+          frame->stack_pointer -= sizeof(src.immediate);
+          break;
+     default:
+          assert(false);
+          break;
+     }
+
+     buf_append_push(buf, src);
+     return offset;
+}
+
+u64 pop_from_stack(buffer *buf, JitStackFrame *frame, JitOperand dst)
+{
+     u64 offset = frame->stack_pointer;
+
+     switch(dst.type) {
+     case JIT_OPERAND_REGISTER:
+     case JIT_OPERAND_REGISTER_INDIRECT_ACCESS:
+          frame->stack_pointer += 8;
+          break;
+     case JIT_OPERAND_IMMEDIATE:
+          frame->stack_pointer += sizeof(dst.immediate);
+          break;
+     default:
+          assert(false);
+          break;
+     }
+
+     buf_append_pop(buf, dst);
+     return offset;
+}
+
+
+
+void move_to_stack(buffer *buf, JitStackFrame *frame, JitRegister stack_register, JitOperand src)
+{
+     switch(src.type) {
+     case JIT_OPERAND_REGISTER:
+     case JIT_OPERAND_REGISTER_INDIRECT_ACCESS:
+          frame->stack_pointer -= 4;
+          break;
+     case JIT_OPERAND_IMMEDIATE:
+          frame->stack_pointer += sizeof(src.immediate);
+          break;
+     default:
+          assert(false);
+          break;
+     }
+
+     buf_append_mov(buf, operand_indirect_access(stack_register, frame->stack_pointer), src);
+}
+
+void move_from_stack(buffer *buf, JitStackFrame *frame, JitRegister stack_register, JitOperand dst)
+{
+     buf_append_mov(buf, dst, operand_indirect_access(stack_register, frame->stack_pointer));
+     switch(dst.type) {
+     case JIT_OPERAND_REGISTER:
+     case JIT_OPERAND_REGISTER_INDIRECT_ACCESS:
+          frame->stack_pointer += 4;
+          break;
+     default:
+          assert(false);
+          break;
+     }
+}
+
 typedef int (*JitConstantInt)();
 JitConstantInt make_constant_int(int value)
 {
      buffer buf = make_buf(4096);
-     buf_append_push_reg(&buf, RBP);
-     buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
+     JitStackFrame frame = { 0 };
+     buf_append_push(&buf, operand_register(RBP));
+     // push_to_stack(&buf, &frame, operand_register(RBP));
 
-     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
+     buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
+     
+     // buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
+     move_to_stack(&buf, &frame, RBP, operand_register(RDI));
+     
      buf_append_mov(&buf, operand_register(RAX), operand_immediate(value));
 
-     buf_append_pop_reg(&buf, RBP);
+     buf_append_pop(&buf, operand_register(RBP));
+     // pop_from_stack(&buf, &frame, operand_register(RBP));
      buf_append_ret(&buf);
 
      return (JitConstantInt)buf.memory;
@@ -505,13 +599,29 @@ typedef int (*JitIdentityInt)();
 JitIdentityInt make_identity_int()
 {
      buffer buf = make_buf(4096);
-     buf_append_push_reg(&buf, RBP);
+     JitStackFrame frame = { 0 };
+     buf_append_push(&buf, operand_register(RBP));
+     // push_to_stack(&buf, &frame, operand_register(RBP));
+
+     printf("stack_pointer after push %d\n", frame.stack_pointer);
+
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
-     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
-     buf_append_mov(&buf, operand_register(RAX), operand_indirect_access(RBP, -4));
+     // buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
+     move_to_stack(&buf, &frame, RBP, operand_register(RDI));
 
-     buf_append_pop_reg(&buf, RBP);
+     printf("stack_pointer after move %d\n", frame.stack_pointer);
+
+     // buf_append_mov(&buf, operand_register(RAX), operand_indirect_access(RBP, -4));
+     move_from_stack(&buf, &frame, RBP, operand_register(RAX));
+
+     printf("stack_pointer after move %d\n", frame.stack_pointer);
+
+     buf_append_pop(&buf, operand_register(RBP));
+     // pop_from_stack(&buf, &frame, operand_register(RBP));
+     
+     printf("stack_pointer after pop %d\n", frame.stack_pointer);
+
      buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
 }
@@ -520,7 +630,7 @@ typedef int (*JitIncrementInt)();
 JitIncrementInt make_increment_int(s32 value)
 {
      buffer buf = make_buf(4096);
-     buf_append_push_reg(&buf, RBP);
+     buf_append_push(&buf, operand_register(RBP));
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
      buf_append_mov(&buf, operand_indirect_access(RBP, -20), operand_register(RDI));
@@ -533,7 +643,7 @@ JitIncrementInt make_increment_int(s32 value)
      /* buf_append_mov_reg_imm32(&buf, RAX, value); */
      /* buf_append_add_reg_rm(&buf, RAX, RBP, -4); */
 
-     buf_append_pop_reg(&buf, RBP);
+     buf_append_pop(&buf, operand_register(RBP));
      buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
 }
@@ -542,14 +652,14 @@ typedef int (*JitAddInt)();
 JitAddInt make_add2_int(s32 value1, s32 value2)
 {
      buffer buf = make_buf(4096);
-     buf_append_push_reg(&buf, RBP);
+     buf_append_push(&buf, operand_register(RBP));
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
      buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_immediate(value1));
      buf_append_mov(&buf, operand_register(RAX), operand_immediate(value2));
      buf_append_add(&buf, operand_register(RAX), operand_indirect_access(RBP, -4));
 
-     buf_append_pop_reg(&buf, RBP);
+     buf_append_pop(&buf, operand_register(RBP));
      buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
 }
@@ -558,7 +668,7 @@ typedef int (*JitAddPassedInt)();
 JitAddPassedInt make_add2_passed_int()
 {
      buffer buf = make_buf(4096);
-     buf_append_push_reg(&buf, RBP);
+     buf_append_push(&buf, operand_register(RBP));
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
      buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
@@ -569,7 +679,7 @@ JitAddPassedInt make_add2_passed_int()
 
      buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
 
-     buf_append_pop_reg(&buf, RBP);
+     buf_append_pop(&buf, operand_register(RBP));
      buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
 }
@@ -590,6 +700,7 @@ void spec()
 
      it("should create a function that returns the value passed",
         JitIdentityInt result = make_identity_int();
+	printf("%d\n", result(42));
         ASSERT_EQ(result(42), 42);
      );
 
