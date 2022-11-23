@@ -497,50 +497,6 @@ typedef struct {
      s32 stack_offset;
 } JitVariable;
 
-u64 push_to_stack(buffer *buf, JitStackFrame *frame, JitOperand src)
-{
-     u64 offset = frame->stack_pointer;
-
-     switch(src.type) {
-     case JIT_OPERAND_REGISTER:
-     case JIT_OPERAND_REGISTER_INDIRECT_ACCESS:
-          frame->stack_pointer -= 8;
-          break;
-     case JIT_OPERAND_IMMEDIATE:
-          frame->stack_pointer -= sizeof(src.immediate);
-          break;
-     default:
-          assert(false);
-          break;
-     }
-
-     buf_append_push(buf, src);
-     return offset;
-}
-
-u64 pop_from_stack(buffer *buf, JitStackFrame *frame, JitOperand dst)
-{
-     u64 offset = frame->stack_pointer;
-
-     switch(dst.type) {
-     case JIT_OPERAND_REGISTER:
-     case JIT_OPERAND_REGISTER_INDIRECT_ACCESS:
-          frame->stack_pointer += 8;
-          break;
-     case JIT_OPERAND_IMMEDIATE:
-          frame->stack_pointer += sizeof(dst.immediate);
-          break;
-     default:
-          assert(false);
-          break;
-     }
-
-     buf_append_pop(buf, dst);
-     return offset;
-}
-
-
-
 void move_to_stack(buffer *buf, JitStackFrame *frame, JitRegister stack_register, JitOperand src)
 {
      switch(src.type) {
@@ -549,7 +505,7 @@ void move_to_stack(buffer *buf, JitStackFrame *frame, JitRegister stack_register
           frame->stack_pointer -= 4;
           break;
      case JIT_OPERAND_IMMEDIATE:
-          frame->stack_pointer += sizeof(src.immediate);
+          frame->stack_pointer -= 8;
           break;
      default:
           assert(false);
@@ -559,18 +515,16 @@ void move_to_stack(buffer *buf, JitStackFrame *frame, JitRegister stack_register
      buf_append_mov(buf, operand_indirect_access(stack_register, frame->stack_pointer), src);
 }
 
-void move_from_stack(buffer *buf, JitStackFrame *frame, JitRegister stack_register, JitOperand dst)
+void move_from_stack_offset(buffer *buf, JitStackFrame *frame, JitRegister stack_register, JitOperand dst, u64 offset)
 {
-     buf_append_mov(buf, dst, operand_indirect_access(stack_register, frame->stack_pointer));
-     switch(dst.type) {
-     case JIT_OPERAND_REGISTER:
-     case JIT_OPERAND_REGISTER_INDIRECT_ACCESS:
-          frame->stack_pointer += 4;
-          break;
-     default:
-          assert(false);
-          break;
-     }
+     buf_append_mov(buf, dst, operand_indirect_access(stack_register, offset));
+}
+
+JitVariable declare_variable(buffer *buf, JitStackFrame *frame, JitRegister stack_register, JitOperand src)
+{
+     move_to_stack(buf, frame, RBP, src);
+     return (JitVariable) { frame->stack_pointer };
+
 }
 
 typedef int (*JitConstantInt)();
@@ -579,17 +533,13 @@ JitConstantInt make_constant_int(int value)
      buffer buf = make_buf(4096);
      JitStackFrame frame = { 0 };
      buf_append_push(&buf, operand_register(RBP));
-     // push_to_stack(&buf, &frame, operand_register(RBP));
-
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
      
-     // buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
-     move_to_stack(&buf, &frame, RBP, operand_register(RDI));
+     JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_register(RDI));
      
      buf_append_mov(&buf, operand_register(RAX), operand_immediate(value));
 
      buf_append_pop(&buf, operand_register(RBP));
-     // pop_from_stack(&buf, &frame, operand_register(RBP));
      buf_append_ret(&buf);
 
      return (JitConstantInt)buf.memory;
@@ -601,27 +551,12 @@ JitIdentityInt make_identity_int()
      buffer buf = make_buf(4096);
      JitStackFrame frame = { 0 };
      buf_append_push(&buf, operand_register(RBP));
-     // push_to_stack(&buf, &frame, operand_register(RBP));
-
-     printf("stack_pointer after push %d\n", frame.stack_pointer);
-
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
-     // buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
-     move_to_stack(&buf, &frame, RBP, operand_register(RDI));
-
-     printf("stack_pointer after move %d\n", frame.stack_pointer);
-
-     // buf_append_mov(&buf, operand_register(RAX), operand_indirect_access(RBP, -4));
-     move_from_stack(&buf, &frame, RBP, operand_register(RAX));
-
-     printf("stack_pointer after move %d\n", frame.stack_pointer);
+     JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_register(RDI));
+     move_from_stack_offset(&buf, &frame, RBP, operand_register(RAX), param1.stack_offset);
 
      buf_append_pop(&buf, operand_register(RBP));
-     // pop_from_stack(&buf, &frame, operand_register(RBP));
-     
-     printf("stack_pointer after pop %d\n", frame.stack_pointer);
-
      buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
 }
@@ -630,18 +565,16 @@ typedef int (*JitIncrementInt)();
 JitIncrementInt make_increment_int(s32 value)
 {
      buffer buf = make_buf(4096);
+     JitStackFrame frame = { 0 };
      buf_append_push(&buf, operand_register(RBP));
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
-     buf_append_mov(&buf, operand_indirect_access(RBP, -20), operand_register(RDI));
-     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_immediate(value));
-     buf_append_mov(&buf, operand_register(RDX), operand_indirect_access(RBP, -20));
-     buf_append_mov(&buf, operand_register(RAX), operand_indirect_access(RBP, -4));
-     buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
+     JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_immediate(value));
+     JitVariable param2 = declare_variable(&buf, &frame, RBP, operand_register(RDI));
+     move_from_stack_offset(&buf, &frame, RBP, operand_register(RDX), param1.stack_offset);
+     move_from_stack_offset(&buf, &frame, RBP, operand_register(RAX), param2.stack_offset);
 
-     /* buf_append_mov_rm_reg(&buf, RBP, RDI, -4); */
-     /* buf_append_mov_reg_imm32(&buf, RAX, value); */
-     /* buf_append_add_reg_rm(&buf, RAX, RBP, -4); */
+     buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
 
      buf_append_pop(&buf, operand_register(RBP));
      buf_append_ret(&buf);
@@ -652,12 +585,16 @@ typedef int (*JitAddInt)();
 JitAddInt make_add2_int(s32 value1, s32 value2)
 {
      buffer buf = make_buf(4096);
+     JitStackFrame frame = { 0 };
      buf_append_push(&buf, operand_register(RBP));
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
-     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_immediate(value1));
-     buf_append_mov(&buf, operand_register(RAX), operand_immediate(value2));
-     buf_append_add(&buf, operand_register(RAX), operand_indirect_access(RBP, -4));
+     JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_immediate(value1));
+     JitVariable param2 = declare_variable(&buf, &frame, RBP, operand_immediate(value2));     
+
+     move_from_stack_offset(&buf, &frame, RBP, operand_register(RDX), param1.stack_offset);
+     move_from_stack_offset(&buf, &frame, RBP, operand_register(RAX), param2.stack_offset);
+     buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
 
      buf_append_pop(&buf, operand_register(RBP));
      buf_append_ret(&buf);
@@ -668,17 +605,17 @@ typedef int (*JitAddPassedInt)();
 JitAddPassedInt make_add2_passed_int()
 {
      buffer buf = make_buf(4096);
+     JitStackFrame frame = { 0 };
      buf_append_push(&buf, operand_register(RBP));
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
 
-     buf_append_mov(&buf, operand_indirect_access(RBP, -4), operand_register(RDI));
-     buf_append_mov(&buf, operand_indirect_access(RBP, -8), operand_register(RSI));
+     JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_register(RDI));
+     JitVariable param2 = declare_variable(&buf, &frame, RBP, operand_register(RSI));
 
-     buf_append_mov(&buf, operand_register(RDX), operand_indirect_access(RBP, -4));
-     buf_append_mov(&buf, operand_register(RAX), operand_indirect_access(RBP, -8));
-
+     move_from_stack_offset(&buf, &frame, RBP, operand_register(RDX), param1.stack_offset);
+     move_from_stack_offset(&buf, &frame, RBP, operand_register(RAX), param2.stack_offset);
      buf_append_add(&buf, operand_register(RAX), operand_register(RDX));
-
+     
      buf_append_pop(&buf, operand_register(RBP));
      buf_append_ret(&buf);
      return (JitIdentityInt)buf.memory;
