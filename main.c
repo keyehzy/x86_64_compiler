@@ -535,15 +535,15 @@ JitVariable declare_variable(buffer *buf, JitStackFrame *frame, JitRegister stac
 }
 
 typedef int (*JitConstantInt)();
-JitConstantInt make_constant_int(int value)
+JitConstantInt make_constant_int(s32 value)
 {
      buffer buf = make_buf(4096);
      JitStackFrame frame = { 0 };
      buf_append_push(&buf, operand_register(RBP));
      buf_append_mov(&buf, operand_register(RBP), operand_register(RSP));
-     
-     JitVariable param1 = declare_variable(&buf, &frame, RBP, operand_register(RDI));
-     
+
+     JitVariable param1 __attribute__((unused)) = declare_variable(&buf, &frame, RBP, operand_register(RDI));
+
      buf_append_mov(&buf, operand_register(RAX), operand_immediate(value));
 
      buf_append_pop(&buf, operand_register(RBP));
