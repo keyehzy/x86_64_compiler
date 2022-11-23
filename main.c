@@ -232,7 +232,7 @@ bool operand_encoding_typecheck(JitOperand operand, JitOperandEncodingType opera
 const JitInstructionEncoding* find_matching_encoding(JitInstruction instruction, JitOperandEncodingType operand_encoding_type_1, JitOperandEncodingType operand_encoding_type_2)
 {
      for (u64 i = 0; i < instruction.mnemonic.encoding_list_length; i++) {
-          JitInstructionEncoding elt = instruction.mnemonic.encoding_list[i]; 
+          JitInstructionEncoding elt = instruction.mnemonic.encoding_list[i];
           if(elt.encoding_type[0] == operand_encoding_type_1 &&
              elt.encoding_type[1] == operand_encoding_type_2) {
                return &instruction.mnemonic.encoding_list[i];
@@ -348,7 +348,7 @@ void encode_mi(buffer *buf, JitInstruction instruction)
           default:
                assert(false);
                break;
-          }               
+          }
      }
 
      buf_append_s32(buf, instruction.operand[1].immediate);
@@ -447,7 +447,7 @@ JitOperand operand_indirect_access(JitRegister reg, u8 offset)
 
 void buf_append_ret(buffer *buf)
 {
-     encode(buf, (JitInstruction) { 
+     encode(buf, (JitInstruction) {
                .mnemonic = mnemonic_ret,
                .instruction_size = JIT_INSTR_SIZE_NONE,
                .operand = { operand_none(), operand_none() }
@@ -664,4 +664,3 @@ int main(int argc, char **argv)
      spec();
      return 0;
 }
-
